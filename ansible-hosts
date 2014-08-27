@@ -1,0 +1,5 @@
+[vagrant-machines]
+node-1 ansible_ssh_user=root ansible_ssh_pass=vagrant
+node-2 ansible_ssh_user=root ansible_ssh_pass=vagrant
+node-3 ansible_ssh_user=root ansible_ssh_pass=vagrant
+

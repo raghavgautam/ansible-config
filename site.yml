@@ -1,0 +1,25 @@
+#default configuration ~/.ansible.cfg
+#ansible-playbook -v site.yml -i ansible-hosts
+#ansible-playbook -v site.yml -i ansible-hosts --limit ss1
+- hosts: all
+  vars:
+    testuser: hrt_qa
+
+#  vars_prompt:
+#    testuser: "Which user are you going to use ?"
+    
+  tasks:
+  - name: create remote user
+    user: name={{ testuser }} comment="Raghav Gautam" group=users
+    when: testuser == "rgautam"
+
+  - name: create home dirs
+    raw: su -c "hadoop dfs -mkdir /user/{{ testuser }}; hadoop dfs -chown -R {{ testuser }} /user/{{ testuser }}" hdfs
+    when: testuser == "rgautam"
+    
+  - name: setup for root user
+    raw: su -c "curl -L https://github.com/raghavgautam/init/archive/master.zip -o /tmp/`whoami`.zip; unzip -o -d /tmp/`whoami`/ /tmp/`whoami`.zip; chmod -R 777 /tmp/`whoami`/; mkdir ~/.emacs.d/; rm -rf ~/.emacs.d/lisp; mv /tmp/`whoami`/init-master/* /tmp/`whoami`/init-master/.[^.]* ~/.emacs.d/; ~/.emacs.d/setup.sh" root
+
+  - name: setup for test user
+    raw: su -c "curl -L https://github.com/raghavgautam/init/archive/master.zip -o /tmp/`whoami`.zip; unzip -o -d /tmp/`whoami`/ /tmp/`whoami`.zip; chmod -R 777 /tmp/`whoami`/; mkdir ~/.emacs.d/; rm -rf ~/.emacs.d/lisp; mv /tmp/`whoami`/init-master/* /tmp/`whoami`/init-master/.[^.]* ~/.emacs.d/; ~/.emacs.d/setup.sh" {{ testuser }}
+        
