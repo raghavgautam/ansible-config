@@ -28,10 +28,16 @@
     tags:
       - hivedr
 
-  - name: upload extra stuff to sharelibs for dr
-    raw: su -c "set -o nounset;                export HDP_VERSION=`cut -f 4 -d '/' < <(ls -d /usr/hdp/2.2.1.1-*)`;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive/lib/hive-*-${HDP_VERSION}.jar                                                       /user/oozie/share/lib/lib_2015*/hive/     ;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive-hcatalog/share/hcatalog/hive-hcatalog-*${HDP_VERSION}.jar                           /user/oozie/share/lib/lib_2015*/hcatalog/ ;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive-hcatalog/share/webhcat/svr/lib/hive-webhcat-0.14.0.${HDP_VERSION}.jar               /user/oozie/share/lib/lib_2015*/hcatalog/ ;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive-hcatalog/share/webhcat/java-client/hive-webhcat-java-client-0.14.${HDP_VERSION}.jar /user/oozie/share/lib/lib_2015*/hcatalog  ;                oozie admin  -oozie http://localhost:11000/oozie –sharelibupdate;                /usr/hdp/current/oozie-server/bin/oozie-stop.sh;                /usr/hdp/current/oozie-server/bin/oozie-start.sh;                " oozie
+  - name: create upload mirroring workflows
+    raw: su -c "hadoop dfs -put hdfs dfs -put /usr/hdp/2.3.0.0-*/falcon/data-mirroring/workflows /apps/data-mirroring" falcon
     tags:
       - hivedr
+
+  - name: create ambari-qa user
+    user: name={{ testuser }} comment="Ambari QA for UI" group=users password=test
+    tags:
+      - ui
+
   - name: creating staging and working dirs
     raw: su -c "{{ item }}" falcon
     with_items:
