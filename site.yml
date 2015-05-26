@@ -1,25 +1,90 @@
 #default configuration ~/.ansible.cfg
 #ansible-playbook -v site.yml -i ansible-hosts
-#ansible-playbook -v site.yml -i ansible-hosts --limit ss1
+#ansible-playbook -v site.yml -i ansible-hosts --limit=~node-[123]
 - hosts: all
   vars:
-    testuser: hrt_qa
+    laptop_user: "rgautam"
 
-#  vars_prompt:
-#    testuser: "Which user are you going to use ?"
-    
+  vars_prompt:
+    - name: "testuser"
+      prompt: "Which user are you going to use for testing ?"
+      default: "rgautam"
+      
   tasks:
   - name: create remote user
-    user: name={{ testuser }} comment="Raghav Gautam" group=users
-    when: testuser == "rgautam"
+    user: name={{ testuser }} comment="Raghav Gautam" group=users password=test
+    when: testuser == laptop_user
+
+  - name: add user falcon2
+    user: name=falcon2 comment="Second user belonging to falcon group" uid=1040 group=falcon
+    when: testuser == laptop_user
 
   - name: create home dirs
     raw: su -c "hadoop dfs -mkdir /user/{{ testuser }}; hadoop dfs -chown -R {{ testuser }} /user/{{ testuser }}" hdfs
-    when: testuser == "rgautam"
+    when: testuser == laptop_user
+
+  - name: create hive dr dirs
+    raw: su -c "hadoop dfs -mkdir /apps/data-mirroring; hadoop dfs -chmod 770 /apps/data-mirroring; hdfs dfs -chgrp users /apps/data-mirroring; hdfs dfs -chown falcon /apps/data-mirroring" hdfs
+    tags:
+      - hivedr
+
+  - name: upload extra stuff to sharelibs for dr
+    raw: su -c "set -o nounset;                export HDP_VERSION=`cut -f 4 -d '/' < <(ls -d /usr/hdp/2.2.1.1-*)`;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive/lib/hive-*-${HDP_VERSION}.jar                                                       /user/oozie/share/lib/lib_2015*/hive/     ;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive-hcatalog/share/hcatalog/hive-hcatalog-*${HDP_VERSION}.jar                           /user/oozie/share/lib/lib_2015*/hcatalog/ ;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive-hcatalog/share/webhcat/svr/lib/hive-webhcat-0.14.0.${HDP_VERSION}.jar               /user/oozie/share/lib/lib_2015*/hcatalog/ ;                hadoop fs -copyFromLocal -f /usr/hdp/${HDP_VERSION}/hive-hcatalog/share/webhcat/java-client/hive-webhcat-java-client-0.14.${HDP_VERSION}.jar /user/oozie/share/lib/lib_2015*/hcatalog  ;                oozie admin  -oozie http://localhost:11000/oozie –sharelibupdate;                /usr/hdp/current/oozie-server/bin/oozie-stop.sh;                /usr/hdp/current/oozie-server/bin/oozie-start.sh;                " oozie
+    tags:
+      - hivedr
+  - name: creating staging and working dirs
+    raw: su -c "{{ item }}" falcon
+    with_items:
+      - hadoop dfs -mkdir /tmp/falcon-regression-staging
+      - hadoop dfs -chmod 777 /tmp/falcon-regression-staging
+      - hadoop dfs -mkdir /tmp/falcon-regression-working
+      - hadoop dfs -chmod 755 /tmp/falcon-regression-working
+    when: testuser == laptop_user
+    tags:
+      - workaround2
+      
+  - name: change falcon timezone
+    raw: su -c "/usr/hdp/current/falcon-server/bin/falcon-stop;sleep 5;TZ=UTC /usr/hdp/current/falcon-server/bin/falcon-start" falcon
+    when: testuser == laptop_user
+    tags:
+      - tz
     
   - name: setup for root user
     raw: su -c "curl -L https://github.com/raghavgautam/init/archive/master.zip -o /tmp/`whoami`.zip; unzip -o -d /tmp/`whoami`/ /tmp/`whoami`.zip; chmod -R 777 /tmp/`whoami`/; mkdir ~/.emacs.d/; rm -rf ~/.emacs.d/lisp; mv /tmp/`whoami`/init-master/* /tmp/`whoami`/init-master/.[^.]* ~/.emacs.d/; ~/.emacs.d/setup.sh" root
-
+    tags:
+      setup
   - name: setup for test user
     raw: su -c "curl -L https://github.com/raghavgautam/init/archive/master.zip -o /tmp/`whoami`.zip; unzip -o -d /tmp/`whoami`/ /tmp/`whoami`.zip; chmod -R 777 /tmp/`whoami`/; mkdir ~/.emacs.d/; rm -rf ~/.emacs.d/lisp; mv /tmp/`whoami`/init-master/* /tmp/`whoami`/init-master/.[^.]* ~/.emacs.d/; ~/.emacs.d/setup.sh" {{ testuser }}
-        
+    tags:
+      setup
+
+  - name: create maven
+    file: path=/home/hrt_qa/maven owner=hrt_qa state=directory
+    when: testuser == laptop_user
+    tags:
+      - maven
+    
+  - name:  copy maven
+    unarchive: src=~/Downloads/apache-maven-3.2.3-bin.tar.gz dest=/home/hrt_qa/maven
+    when: testuser == laptop_user
+    tags:
+      - maven
+
+  - name: fix permissions of maven
+    file: path=/home/hrt_qa/maven owner=hrt_qa recurse=yes
+    when: testuser == laptop_user
+    tags:
+      - maven
+
+  - name: add maven to path
+    lineinfile: dest=/home/hrt_qa/.bashrc state=present line='export PATH=$PATH:~/maven/apache-maven-3.2.3/bin' create=yes backup=yes
+    when: testuser == laptop_user
+    tags:
+      - maven
+    
+  - name: fix permissions of bashrc if required
+    file: path=/home/hrt_qa/.bashrc owner=hrt_qa
+    when: testuser == laptop_user
+    tags:
+      - maven
+
